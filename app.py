@@ -89,7 +89,7 @@ def home():
 <body>
 
 <div class="card">
-    <h1>🎯 随机分组报名系统</h1>
+    <h1>🎯>Good Friends Fellowship</h1>
     <h2>扫码填写你的姓名</h2>
 
     <img src="/qr" width="200">
