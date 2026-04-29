@@ -83,13 +83,13 @@ def home():
         }
 
         .left-photo {
-             left: -220px;
+             left: -400px;
              top: 140px;
             transform: rotate(-8deg);
         }
 
         .right-photo {
-            right: -220px;
+            right: -400px;
             top: 140px;
             transform: rotate(8deg);
         }
