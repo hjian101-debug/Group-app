@@ -1,182 +1,422 @@
-from flask import Flask, request, redirect, render_template_string
+from flask import Flask, request, redirect, render_template_string, send_file
 import json
 import os
 import random
 import qrcode
 from io import BytesIO
-from flask import send_file
 
 app = Flask(__name__)
 
 DATA_FILE = "names.json"
+JOIN_URL = "https://group-app-55j5.onrender.com/join"
 
-# ===== 数据处理 =====
+
 def load_names():
     if not os.path.exists(DATA_FILE):
         return []
     with open(DATA_FILE, "r", encoding="utf-8") as f:
         return json.load(f)
 
+
 def save_names(names):
     with open(DATA_FILE, "w", encoding="utf-8") as f:
         json.dump(names, f, ensure_ascii=False, indent=2)
 
-# ===== 首页（美化版）=====
+
 @app.route("/")
 def home():
-    join_url = "https://group-app-55j5.onrender.com/join"
-
     return render_template_string("""
 <!DOCTYPE html>
 <html>
 <head>
     <title>Good Friends Fellowship</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
+
     <style>
         body {
-            font-family: Arial, sans-serif;
-            background: linear-gradient(to right, #667eea, #764ba2);
             margin: 0;
+            font-family: Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
         }
 
         .card {
             background: white;
-            max-width: 400px;
-            margin: 60px auto;
-            padding: 30px;
-            border-radius: 15px;
-            box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+            padding: 45px 55px;
+            border-radius: 22px;
             text-align: center;
+            width: 480px;
+            box-shadow: 0 12px 35px rgba(0,0,0,0.22);
         }
 
         h1 {
-            color: #333;
+            font-size: 30px;
+            margin-bottom: 12px;
+            color: #222;
+            white-space: nowrap;
         }
 
         h2 {
             color: #666;
             font-size: 18px;
+            margin-bottom: 25px;
         }
 
-        img {
-            margin: 20px 0;
+        .qr {
+            width: 260px;
+            margin: 20px 0 30px 0;
         }
 
-        .link {
-            background: #f4f4f4;
-            padding: 10px;
-            border-radius: 8px;
-            word-break: break-all;
+        .link-title {
+            font-size: 15px;
+            margin-bottom: 10px;
+            color: #333;
+        }
+
+        .link-box {
+            background: #f2f2f2;
+            padding: 12px;
+            border-radius: 10px;
             font-size: 14px;
+            word-break: break-all;
+            margin-bottom: 25px;
         }
 
         .admin-btn {
-            margin-top: 20px;
             display: inline-block;
-            padding: 10px 20px;
+            padding: 13px 28px;
             background: #667eea;
             color: white;
-            border-radius: 8px;
+            border-radius: 10px;
             text-decoration: none;
+            font-size: 16px;
         }
 
         .admin-btn:hover {
+            background: #5a67d8;
+        }
+
+        @media (max-width: 600px) {
+            .card {
+                width: 82%;
+                padding: 35px 22px;
+            }
+
+            h1 {
+                font-size: 24px;
+            }
+
+            .qr {
+                width: 230px;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="card">
+        <h1>🎯 Good Friends Fellowship</h1>
+        <h2>扫码填写你的姓名</h2>
+
+        <img src="/qr" class="qr">
+
+        <div class="link-title">打不开二维码？复制链接：</div>
+        <div class="link-box">{{ join_url }}</div>
+
+        <a href="/admin" class="admin-btn">进入管理员页面</a>
+    </div>
+</body>
+</html>
+""", join_url=JOIN_URL)
+
+
+@app.route("/qr")
+def qr():
+    img = qrcode.make(JOIN_URL)
+    buf = BytesIO()
+    img.save(buf)
+    buf.seek(0)
+    return send_file(buf, mimetype="image/png")
+
+
+@app.route("/join", methods=["GET", "POST"])
+def join():
+    if request.method == "POST":
+        name = request.form.get("name", "").strip()
+
+        if name:
+            names = load_names()
+            if name not in names:
+                names.append(name)
+                save_names(names)
+
+        return render_template_string("""
+<!DOCTYPE html>
+<html>
+<head>
+    <title>提交成功</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+
+    <style>
+        body {
+            margin: 0;
+            font-family: Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+        }
+
+        .card {
+            background: white;
+            padding: 40px;
+            border-radius: 20px;
+            text-align: center;
+            width: 360px;
+            box-shadow: 0 12px 35px rgba(0,0,0,0.22);
+        }
+
+        h1 {
+            color: #222;
+        }
+
+        p {
+            color: #555;
+            font-size: 18px;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="card">
+        <h1>提交成功 ✅</h1>
+        <p>你的名字是：<strong>{{ name }}</strong></p>
+        <p>请等待分组。</p>
+    </div>
+</body>
+</html>
+""", name=name)
+
+    return """
+<!DOCTYPE html>
+<html>
+<head>
+    <title>填写姓名</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+
+    <style>
+        body {
+            margin: 0;
+            font-family: Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+        }
+
+        .card {
+            background: white;
+            padding: 40px;
+            border-radius: 20px;
+            text-align: center;
+            width: 360px;
+            box-shadow: 0 12px 35px rgba(0,0,0,0.22);
+        }
+
+        h1 {
+            color: #222;
+        }
+
+        input {
+            width: 90%;
+            padding: 14px;
+            font-size: 18px;
+            border-radius: 10px;
+            border: 1px solid #ccc;
+            margin-bottom: 20px;
+        }
+
+        button {
+            padding: 13px 30px;
+            font-size: 18px;
+            border: none;
+            border-radius: 10px;
+            background: #667eea;
+            color: white;
+            cursor: pointer;
+        }
+
+        button:hover {
             background: #5a67d8;
         }
     </style>
 </head>
 
 <body>
+    <div class="card">
+        <h1>填写姓名</h1>
 
-<div class="card">
-    <h1>🎯>Good Friends Fellowship</h1>
-    <h2>扫码填写你的姓名</h2>
-
-    <img src="/qr" width="200">
-
-    <p>打不开二维码？复制链接：</p>
-    <div class="link">{{join_url}}</div>
-
-    <a href="/admin" class="admin-btn">进入管理员页面</a>
-</div>
-
+        <form method="post">
+            <input name="name" placeholder="请输入你的姓名" required>
+            <br>
+            <button type="submit">提交</button>
+        </form>
+    </div>
 </body>
 </html>
-""", join_url=join_url)
+"""
 
-# ===== 二维码 =====
-@app.route("/qr")
-def qr():
-    join_url = "https://group-app-55j5.onrender.com/join"
-    img = qrcode.make(join_url)
 
-    buf = BytesIO()
-    img.save(buf)
-    buf.seek(0)
-
-    return send_file(buf, mimetype='image/png')
-
-# ===== 报名页面 =====
-@app.route("/join", methods=["GET", "POST"])
-def join():
-    if request.method == "POST":
-        name = request.form.get("name")
-        if name:
-            names = load_names()
-            names.append(name)
-            save_names(names)
-        return redirect("/join")
-
-    return """
-    <h2>请输入你的姓名</h2>
-    <form method="post">
-        <input name="name" placeholder="姓名">
-        <button type="submit">提交</button>
-    </form>
-    """
-
-# ===== 管理员页面 =====
 @app.route("/admin", methods=["GET", "POST"])
 def admin():
     names = load_names()
-
-    result = ""
+    groups = None
 
     if request.method == "POST":
-        group_num = int(request.form.get("group"))
+        group_count = int(request.form.get("group_count", 1))
 
-        random.shuffle(names)
-        groups = [names[i::group_num] for i in range(group_num)]
+        shuffled_names = names[:]
+        random.shuffle(shuffled_names)
 
-        result += "<h3>分组结果：</h3>"
-        for i, g in enumerate(groups):
-            result += f"<p>第{i+1}组：{', '.join(g)}</p>"
+        groups = [[] for _ in range(group_count)]
 
-    name_list = "<br>".join(names)
+        for i, name in enumerate(shuffled_names):
+            groups[i % group_count].append(name)
 
-    return f"""
-    <h2>管理员页面</h2>
+    return render_template_string("""
+<!DOCTYPE html>
+<html>
+<head>
+    <title>管理员页面</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
 
-    <h3>当前人数：{len(names)}</h3>
-    <p>{name_list}</p>
+    <style>
+        body {
+            margin: 0;
+            font-family: Arial, sans-serif;
+            background: #f4f5fb;
+            padding: 30px;
+        }
 
-    <hr>
+        .container {
+            max-width: 900px;
+            margin: auto;
+            background: white;
+            padding: 30px;
+            border-radius: 18px;
+            box-shadow: 0 8px 25px rgba(0,0,0,0.12);
+        }
 
-    <form method="post">
-        <input name="group" placeholder="分几组">
-        <button type="submit">开始分组</button>
-    </form>
+        h1 {
+            color: #222;
+        }
 
-    <br>
-    <a href="/clear">清空数据</a>
-    """
+        .name-list {
+            background: #f7f7f7;
+            padding: 15px;
+            border-radius: 12px;
+        }
 
-# ===== 清空数据 =====
-@app.route("/clear")
+        input {
+            padding: 10px;
+            font-size: 16px;
+            border-radius: 8px;
+            border: 1px solid #ccc;
+        }
+
+        button {
+            padding: 10px 18px;
+            font-size: 16px;
+            border: none;
+            border-radius: 8px;
+            background: #667eea;
+            color: white;
+            cursor: pointer;
+        }
+
+        button:hover {
+            background: #5a67d8;
+        }
+
+        .group {
+            background: #f2f3ff;
+            padding: 15px;
+            border-radius: 12px;
+            margin: 15px 0;
+        }
+
+        .clear-btn {
+            background: #e53e3e;
+        }
+
+        .clear-btn:hover {
+            background: #c53030;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <h1>管理员页面</h1>
+
+        <h2>当前已报名人数：{{ names|length }}</h2>
+
+        <div class="name-list">
+            <ol>
+            {% for name in names %}
+                <li>{{ name }}</li>
+            {% endfor %}
+            </ol>
+        </div>
+
+        <hr>
+
+        <h2>随机分组</h2>
+
+        <form method="post">
+            <input type="number" name="group_count" min="1" placeholder="请输入分几组" required>
+            <button type="submit">开始分组</button>
+        </form>
+
+        {% if groups %}
+            <hr>
+            <h2>分组结果</h2>
+
+            {% for group in groups %}
+                <div class="group">
+                    <h3>第 {{ loop.index }} 组：{{ group|length }} 人</h3>
+                    <ul>
+                    {% for name in group %}
+                        <li>{{ name }}</li>
+                    {% endfor %}
+                    </ul>
+                </div>
+            {% endfor %}
+        {% endif %}
+
+        <hr>
+
+        <form action="/clear" method="post">
+            <button class="clear-btn" type="submit" onclick="return confirm('确定要清空名单吗？')">
+                清空名单
+            </button>
+        </form>
+    </div>
+</body>
+</html>
+""", names=names, groups=groups)
+
+
+@app.route("/clear", methods=["POST"])
 def clear():
     save_names([])
     return redirect("/admin")
 
-# ===== 启动 =====
+
 if __name__ == "__main__":
-    app.run()
+    app.run(host="0.0.0.0", port=5000)
