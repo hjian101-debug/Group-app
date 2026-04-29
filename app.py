@@ -34,7 +34,7 @@ def save_names(names):
 
 @app.route("/")
 def home():
-    join_url = "https://group-app-5555.onrender.com/join"
+    join_url = "https://group-app-55j5.onrender.com/join"
    
 
     return render_template_string("""
@@ -54,7 +54,7 @@ def home():
 
 @app.route("/qr")
 def qr():
-    join_url = "https://group-app-5555.onrender.com/join"
+    join_url = "https://group-app-55j5.onrender.com/join"
 
     img = qrcode.make(join_url)
     buffer = BytesIO()
