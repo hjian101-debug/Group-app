@@ -37,127 +37,80 @@ def home():
     join_url = "https://group-app-55j5.onrender.com/join"
    
 
-    return render_template_string("""
-    <h1>随机分组报名系统</h1>
+  return render_template_string("""
+<!DOCTYPE html>
+<html>
+<head>
+    <title>随机分组报名系统</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background: linear-gradient(to right, #667eea, #764ba2);
+            text-align: center;
+            margin: 0;
+            padding: 0;
+        }
 
-    <h2>请大家扫码填写姓名</h2>
-    <img src="/qr" width="260">
+        .card {
+            background: white;
+            width: 400px;
+            margin: 80px auto;
+            padding: 30px;
+            border-radius: 15px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+        }
 
-    <p>手机打不开二维码时，手动输入这个网址：</p>
-    <h3>{{ join_url }}</h3>
+        h1 {
+            color: #333;
+        }
 
-    <hr>
+        h2 {
+            color: #666;
+        }
 
-    <p><a href="/admin">进入管理员页面</a></p>
-    """, join_url=join_url)
+        img {
+            margin: 20px 0;
+            border-radius: 10px;
+        }
 
+        .link {
+            background: #f4f4f4;
+            padding: 10px;
+            border-radius: 8px;
+            word-break: break-all;
+            font-size: 14px;
+        }
 
-@app.route("/qr")
-def qr():
-    join_url = "https://group-app-55j5.onrender.com/join"
+        .admin-btn {
+            margin-top: 20px;
+            display: inline-block;
+            padding: 10px 20px;
+            background: #667eea;
+            color: white;
+            border-radius: 8px;
+            text-decoration: none;
+        }
 
-    img = qrcode.make(join_url)
-    buffer = BytesIO()
-    img.save(buffer, format="PNG")
-    buffer.seek(0)
+        .admin-btn:hover {
+            background: #5a67d8;
+        }
+    </style>
+</head>
 
-    return send_file(buffer, mimetype="image/png")
+<body>
 
+<div class="card">
+    <h1>🎯 随机分组报名系统</h1>
+    <h2>扫码填写你的姓名</h2>
 
-@app.route("/join", methods=["GET", "POST"])
-def join():
-    if request.method == "POST":
-        name = request.form.get("name", "").strip()
+    <img src="/qr" width="200">
 
-        if name:
-            names = load_names()
+    <p>打不开二维码？复制链接：</p>
+    <div class="link">{{join_url}}</div>
 
-            if name not in names:
-                names.append(name)
-                save_names(names)
+    <a href="/admin" class="admin-btn">进入管理员页面</a>
+</div>
 
-            return render_template_string("""
-            <h1>提交成功</h1>
-            <p>你的名字是：<strong>{{ name }}</strong></p>
-            <p>请等待老师/管理员分组。</p>
-            """, name=name)
-
-    return render_template_string("""
-    <h1>填写姓名</h1>
-
-    <form method="post">
-        <input name="name" placeholder="请输入你的姓名" required style="font-size:24px;">
-        <button type="submit" style="font-size:24px;">提交</button>
-    </form>
-    """)
-
-
-@app.route("/admin", methods=["GET", "POST"])
-def admin():
-    names = load_names()
-    groups = None
-
-    if request.method == "POST":
-        group_count = int(request.form.get("group_count", 1))
-
-        shuffled_names = names[:]
-        random.shuffle(shuffled_names)
-
-        groups = [[] for _ in range(group_count)]
-
-        for i, name in enumerate(shuffled_names):
-            groups[i % group_count].append(name)
-
-    return render_template_string("""
-    <h1>管理员页面</h1>
-
-    <h2>当前已报名人数：{{ names|length }}</h2>
-
-    <ol>
-    {% for name in names %}
-        <li>{{ name }}</li>
-    {% endfor %}
-    </ol>
-
-    <hr>
-
-    <h2>随机分组</h2>
-
-    <form method="post">
-        <label>请输入分几组：</label>
-        <input type="number" name="group_count" min="1" required>
-        <button type="submit">开始分组</button>
-    </form>
-
-    {% if groups %}
-        <hr>
-        <h2>分组结果</h2>
-
-        {% for group in groups %}
-            <h3>第 {{ loop.index }} 组：{{ group|length }} 人</h3>
-            <ul>
-            {% for name in group %}
-                <li>{{ name }}</li>
-            {% endfor %}
-            </ul>
-        {% endfor %}
-    {% endif %}
-
-    <hr>
-
-    <form action="/clear" method="post">
-        <button type="submit" onclick="return confirm('确定要清空名单吗？')">
-            清空名单
-        </button>
-    </form>
-    """, names=names, groups=groups)
-
-
-@app.route("/clear", methods=["POST"])
-def clear():
-    save_names([])
-    return redirect("/admin")
-
-
-if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000, debug=True)
+</body>
+</html>
+""", join_url=join_url)
