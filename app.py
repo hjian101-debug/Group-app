@@ -30,7 +30,7 @@ def home():
 <!DOCTYPE html>
 <html>
 <head>
-    <title>随机分组报名系统</title>
+    <title>Good Friends Fellowship</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <style>
         body {
