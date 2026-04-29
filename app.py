@@ -34,8 +34,8 @@ def save_names(names):
 
 @app.route("/")
 def home():
-    ip = get_local_ip()
-    join_url = f"http://{ip}:5000/join"
+    join_url = "https://group-app-5555.onrender.com/join"
+   
 
     return render_template_string("""
     <h1>随机分组报名系统</h1>
@@ -54,8 +54,7 @@ def home():
 
 @app.route("/qr")
 def qr():
-    ip = get_local_ip()
-    join_url = f"http://{ip}:5000/join"
+    join_url = "https://group-app-5555.onrender.com/join"
 
     img = qrcode.make(join_url)
     buffer = BytesIO()
