@@ -73,8 +73,8 @@ def home():
 
         .photo {
             position: absolute;
-            width: 230px;
-            height: 160px;
+            width: 460px;
+            height: 320px;
             object-fit: cover;
             border: 8px solid white;
             border-radius: 14px;
@@ -83,14 +83,14 @@ def home():
         }
 
         .left-photo {
-            left: -105px;
-            top: 185px;
+             left: -220px;
+             top: 140px;
             transform: rotate(-8deg);
         }
 
         .right-photo {
-            right: -105px;
-            top: 185px;
+            right: -220px;
+            top: 140px;
             transform: rotate(8deg);
         }
 
