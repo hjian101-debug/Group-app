@@ -45,72 +45,103 @@ def home():
 
         .card {
             background: white;
-            padding: 45px 55px;
-            border-radius: 22px;
+            padding: 45px 60px;
+            border-radius: 24px;
             text-align: center;
-            width: 480px;
-            box-shadow: 0 12px 35px rgba(0,0,0,0.22);
+            width: 760px;
+            box-shadow: 0 20px 55px rgba(0,0,0,0.25);
+            position: relative;
         }
 
         h1 {
-            font-size: 30px;
-            margin-bottom: 12px;
+            font-size: 34px;
+            margin: 0 0 15px 0;
             color: #222;
             white-space: nowrap;
         }
 
         h2 {
-            color: #666;
-            font-size: 18px;
+            color: #555;
+            font-size: 20px;
             margin-bottom: 25px;
         }
 
         .qr {
             width: 260px;
-            margin: 20px 0 30px 0;
+            margin: 15px 0 30px 0;
+        }
+
+        .photo {
+            position: absolute;
+            width: 230px;
+            height: 160px;
+            object-fit: cover;
+            border: 8px solid white;
+            border-radius: 14px;
+            box-shadow: 0 14px 35px rgba(0,0,0,0.32);
+            z-index: 2;
+        }
+
+        .left-photo {
+            left: -105px;
+            top: 185px;
+            transform: rotate(-8deg);
+        }
+
+        .right-photo {
+            right: -105px;
+            top: 185px;
+            transform: rotate(8deg);
         }
 
         .link-title {
-            font-size: 15px;
+            font-size: 16px;
             margin-bottom: 10px;
             color: #333;
         }
 
         .link-box {
             background: #f2f2f2;
-            padding: 12px;
-            border-radius: 10px;
-            font-size: 14px;
+            padding: 13px;
+            border-radius: 11px;
+            font-size: 15px;
             word-break: break-all;
-            margin-bottom: 25px;
+            margin: 0 auto 25px auto;
+            max-width: 520px;
         }
 
         .admin-btn {
             display: inline-block;
-            padding: 13px 28px;
+            padding: 14px 32px;
             background: #667eea;
             color: white;
-            border-radius: 10px;
+            border-radius: 11px;
             text-decoration: none;
-            font-size: 16px;
+            font-size: 17px;
+            font-weight: bold;
         }
 
         .admin-btn:hover {
             background: #5a67d8;
         }
 
-        @media (max-width: 600px) {
+        @media (max-width: 900px) {
             .card {
                 width: 82%;
-                padding: 35px 22px;
+                padding: 35px 24px;
             }
 
             h1 {
                 font-size: 24px;
+                white-space: normal;
             }
 
             .qr {
                 width: 230px;
+            }
+
+            .photo {
+                display: none;
             }
         }
     </style>
@@ -118,6 +149,9 @@ def home():
 
 <body>
     <div class="card">
+        <img src="/static/photo1.jpg" class="photo left-photo">
+        <img src="/static/photo2.jpg" class="photo right-photo">
+
         <h1>🎯 Good Friends Fellowship</h1>
         <h2>扫码填写你的姓名</h2>
 
