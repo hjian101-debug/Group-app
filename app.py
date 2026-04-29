@@ -67,7 +67,7 @@ def home():
         }
 
         .qr {
-            width: 260px;
+            width: 320px;
             margin: 15px 0 30px 0;
         }
 
