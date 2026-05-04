@@ -188,15 +188,48 @@ def join():
         name = request.form.get("name", "").strip()
         if name:
             new_friends = load_new_friends()
-            if name not in new_friends:
+            members = load_members()
+
+            if name not in new_friends and name not in members:
                 new_friends.append(name)
                 save_json(NEW_FRIENDS_FILE, new_friends)
 
         return render_template_string("""
+<!DOCTYPE html>
+<html>
+<head>
+    <title>提交成功</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <style>
+        body {
+            margin: 0;
+            font-family: Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+        }
+
+        .card {
+            background: white;
+            padding: 40px;
+            border-radius: 20px;
+            text-align: center;
+            width: 360px;
+            box-shadow: 0 12px 35px rgba(0,0,0,0.22);
+        }
+    </style>
+</head>
+<body>
+    <div class="card">
         <h1>提交成功 ✅</h1>
         <p>你的名字是：<strong>{{ name }}</strong></p>
         <p>请等待分组。</p>
-        """, name=name)
+    </div>
+</body>
+</html>
+""", name=name)
 
     return """
 <!DOCTYPE html>
@@ -292,10 +325,10 @@ def admin():
         }
 
         .container {
-            max-width: 1000px;
+            max-width: 1200px;
             margin: auto;
             background: white;
-            padding: 30px;
+            padding: 35px;
             border-radius: 18px;
             box-shadow: 0 8px 25px rgba(0,0,0,0.12);
         }
@@ -306,27 +339,50 @@ def admin():
 
         .section {
             background: #f7f7f7;
-            padding: 18px;
+            padding: 22px;
             border-radius: 14px;
-            margin-bottom: 25px;
+            margin-bottom: 30px;
+        }
+
+        .member-actions {
+            margin-bottom: 18px;
+        }
+
+        .member-actions button {
+            margin-right: 10px;
         }
 
         .member-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-            gap: 10px;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 12px;
         }
 
-        label {
+        .member-card {
             background: white;
-            padding: 10px;
+            padding: 10px 12px;
             border-radius: 10px;
-            display: block;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px;
+        }
+
+        .member-left {
+            display: flex;
+            align-items: center;
+            gap: 8px;
         }
 
         input[type="checkbox"] {
             transform: scale(1.2);
-            margin-right: 8px;
+        }
+
+        input[type="number"] {
+            padding: 11px;
+            font-size: 16px;
+            border-radius: 8px;
+            border: 1px solid #ccc;
         }
 
         button, .small-btn {
@@ -342,29 +398,64 @@ def admin():
         }
 
         .small-btn {
-            font-size: 14px;
-            padding: 6px 12px;
-            margin-left: 10px;
+            font-size: 13px;
+            padding: 6px 10px;
+        }
+
+        .delete-btn {
+            background: #e53e3e;
+        }
+
+        .delete-btn:hover {
+            background: #c53030;
         }
 
         .clear-btn {
             background: #e53e3e;
         }
 
+        .group-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 22px;
+        }
+
         .group {
             background: #f2f3ff;
-            padding: 15px;
-            border-radius: 12px;
-            margin: 15px 0;
+            padding: 20px;
+            border-radius: 14px;
+            min-height: 160px;
         }
 
         .new-friend {
             background: white;
-            padding: 10px;
+            padding: 12px;
             border-radius: 10px;
             margin: 8px 0;
         }
+
+        @media (max-width: 700px) {
+            .group-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .container {
+                padding: 20px;
+            }
+        }
     </style>
+
+    <script>
+        function selectAllMembers() {
+            const boxes = document.querySelectorAll('input[name="members"]');
+            boxes.forEach(box => box.checked = true);
+        }
+
+        function unselectAllMembers() {
+            const boxes = document.querySelectorAll('input[name="members"]');
+            boxes.forEach(box => box.checked = false);
+        }
+    </script>
 </head>
 
 <body>
@@ -374,13 +465,27 @@ def admin():
     <form method="post">
         <div class="section">
             <h2>常来成员：勾选今天来了的人</h2>
+
+            <div class="member-actions">
+                <button type="button" onclick="selectAllMembers()">全选</button>
+                <button type="button" onclick="unselectAllMembers()">取消全选</button>
+            </div>
+
             <div class="member-grid">
             {% for member in members %}
-                <label>
-                    <input type="checkbox" name="members" value="{{ member }}"
-                    {% if member in selected_members %}checked{% endif %}>
-                    {{ member }}
-                </label>
+                <div class="member-card">
+                    <div class="member-left">
+                        <input type="checkbox" name="members" value="{{ member }}"
+                        {% if member in selected_members %}checked{% endif %}>
+                        <span>{{ member }}</span>
+                    </div>
+
+                    <a class="small-btn delete-btn"
+                       href="/delete_member/{{ member }}"
+                       onclick="return confirm('确定要删除 {{ member }} 吗？')">
+                       删除
+                    </a>
+                </div>
             {% endfor %}
             </div>
         </div>
@@ -410,6 +515,8 @@ def admin():
     {% if groups %}
         <div class="section">
             <h2>分组结果</h2>
+
+            <div class="group-grid">
             {% for group in groups %}
                 <div class="group">
                     <h3>第 {{ loop.index }} 组：{{ group|length }} 人</h3>
@@ -420,6 +527,7 @@ def admin():
                     </ul>
                 </div>
             {% endfor %}
+            </div>
         </div>
     {% endif %}
 
@@ -439,9 +547,25 @@ def admin():
 @app.route("/add_member/<name>")
 def add_member(name):
     members = load_members()
+    new_friends = load_new_friends()
 
     if name not in members:
         members.append(name)
+        save_json(MEMBERS_FILE, members)
+
+    if name in new_friends:
+        new_friends.remove(name)
+        save_json(NEW_FRIENDS_FILE, new_friends)
+
+    return redirect("/admin")
+
+
+@app.route("/delete_member/<name>")
+def delete_member(name):
+    members = load_members()
+
+    if name in members:
+        members.remove(name)
         save_json(MEMBERS_FILE, members)
 
     return redirect("/admin")
