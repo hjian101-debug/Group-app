@@ -7,20 +7,37 @@ from io import BytesIO
 
 app = Flask(__name__)
 
-DATA_FILE = "names.json"
 JOIN_URL = "https://group-app-55j5.onrender.com/join"
+NEW_FRIENDS_FILE = "new_friends.json"
+MEMBERS_FILE = "members.json"
+
+DEFAULT_MEMBERS = [
+    "孙牧师", "师母", "胡老师", "京台姐", "Henry", "春霞", "Monica", "新业",
+    "璐瑶", "Luisa", "Harry", "边边", "一王", "贠芳", "Larry", "骆雨",
+    "浩文", "Amy", "天艺", "沁沁", "迦南", "雅歌"
+]
 
 
-def load_names():
-    if not os.path.exists(DATA_FILE):
-        return []
-    with open(DATA_FILE, "r", encoding="utf-8") as f:
+def load_json(filename, default):
+    if not os.path.exists(filename):
+        return default
+    with open(filename, "r", encoding="utf-8") as f:
         return json.load(f)
 
 
-def save_names(names):
-    with open(DATA_FILE, "w", encoding="utf-8") as f:
-        json.dump(names, f, ensure_ascii=False, indent=2)
+def save_json(filename, data):
+    with open(filename, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, indent=2)
+
+
+def load_members():
+    members = load_json(MEMBERS_FILE, DEFAULT_MEMBERS)
+    save_json(MEMBERS_FILE, members)
+    return members
+
+
+def load_new_friends():
+    return load_json(NEW_FRIENDS_FILE, [])
 
 
 @app.route("/")
@@ -31,7 +48,6 @@ def home():
 <head>
     <title>Good Friends Fellowship</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
-
     <style>
         body {
             margin: 0;
@@ -67,7 +83,7 @@ def home():
         }
 
         .qr {
-            width: 320px;
+            width: 260px;
             margin: 15px 0 30px 0;
         }
 
@@ -83,21 +99,15 @@ def home():
         }
 
         .left-photo {
-             left: -400px;
-             top: 140px;
+            left: -220px;
+            top: 140px;
             transform: rotate(-8deg);
         }
 
         .right-photo {
-            right: -400px;
+            right: -220px;
             top: 140px;
             transform: rotate(8deg);
-        }
-
-        .link-title {
-            font-size: 16px;
-            margin-bottom: 10px;
-            color: #333;
         }
 
         .link-box {
@@ -119,10 +129,6 @@ def home():
             text-decoration: none;
             font-size: 17px;
             font-weight: bold;
-        }
-
-        .admin-btn:hover {
-            background: #5a67d8;
         }
 
         @media (max-width: 900px) {
@@ -153,11 +159,11 @@ def home():
         <img src="/static/photo2.jpg" class="photo right-photo">
 
         <h1>🎯 Good Friends Fellowship</h1>
-        <h2>扫码填写你的姓名</h2>
+        <h2>新朋友扫码填写姓名</h2>
 
         <img src="/qr" class="qr">
 
-        <div class="link-title">打不开二维码？复制链接：</div>
+        <div>打不开二维码？复制链接：</div>
         <div class="link-box">{{ join_url }}</div>
 
         <a href="/admin" class="admin-btn">进入管理员页面</a>
@@ -180,60 +186,17 @@ def qr():
 def join():
     if request.method == "POST":
         name = request.form.get("name", "").strip()
-
         if name:
-            names = load_names()
-            if name not in names:
-                names.append(name)
-                save_names(names)
+            new_friends = load_new_friends()
+            if name not in new_friends:
+                new_friends.append(name)
+                save_json(NEW_FRIENDS_FILE, new_friends)
 
         return render_template_string("""
-<!DOCTYPE html>
-<html>
-<head>
-    <title>提交成功</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-
-    <style>
-        body {
-            margin: 0;
-            font-family: Arial, sans-serif;
-            background: linear-gradient(135deg, #667eea, #764ba2);
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            min-height: 100vh;
-        }
-
-        .card {
-            background: white;
-            padding: 40px;
-            border-radius: 20px;
-            text-align: center;
-            width: 360px;
-            box-shadow: 0 12px 35px rgba(0,0,0,0.22);
-        }
-
-        h1 {
-            color: #222;
-        }
-
-        p {
-            color: #555;
-            font-size: 18px;
-        }
-    </style>
-</head>
-
-<body>
-    <div class="card">
         <h1>提交成功 ✅</h1>
         <p>你的名字是：<strong>{{ name }}</strong></p>
         <p>请等待分组。</p>
-    </div>
-</body>
-</html>
-""", name=name)
+        """, name=name)
 
     return """
 <!DOCTYPE html>
@@ -241,7 +204,6 @@ def join():
 <head>
     <title>填写姓名</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
-
     <style>
         body {
             margin: 0;
@@ -260,10 +222,6 @@ def join():
             text-align: center;
             width: 360px;
             box-shadow: 0 12px 35px rgba(0,0,0,0.22);
-        }
-
-        h1 {
-            color: #222;
         }
 
         input {
@@ -284,17 +242,12 @@ def join():
             color: white;
             cursor: pointer;
         }
-
-        button:hover {
-            background: #5a67d8;
-        }
     </style>
 </head>
 
 <body>
     <div class="card">
         <h1>填写姓名</h1>
-
         <form method="post">
             <input name="name" placeholder="请输入你的姓名" required>
             <br>
@@ -308,18 +261,20 @@ def join():
 
 @app.route("/admin", methods=["GET", "POST"])
 def admin():
-    names = load_names()
+    members = load_members()
+    new_friends = load_new_friends()
     groups = None
+    selected_members = []
 
     if request.method == "POST":
+        selected_members = request.form.getlist("members")
         group_count = int(request.form.get("group_count", 1))
 
-        shuffled_names = names[:]
-        random.shuffle(shuffled_names)
+        all_people = selected_members + new_friends
+        random.shuffle(all_people)
 
         groups = [[] for _ in range(group_count)]
-
-        for i, name in enumerate(shuffled_names):
+        for i, name in enumerate(all_people):
             groups[i % group_count].append(name)
 
     return render_template_string("""
@@ -328,7 +283,6 @@ def admin():
 <head>
     <title>管理员页面</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
-
     <style>
         body {
             margin: 0;
@@ -338,7 +292,7 @@ def admin():
         }
 
         .container {
-            max-width: 900px;
+            max-width: 1000px;
             margin: auto;
             background: white;
             padding: 30px;
@@ -346,24 +300,36 @@ def admin():
             box-shadow: 0 8px 25px rgba(0,0,0,0.12);
         }
 
-        h1 {
+        h1, h2 {
             color: #222;
         }
 
-        .name-list {
+        .section {
             background: #f7f7f7;
-            padding: 15px;
-            border-radius: 12px;
+            padding: 18px;
+            border-radius: 14px;
+            margin-bottom: 25px;
         }
 
-        input {
+        .member-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+            gap: 10px;
+        }
+
+        label {
+            background: white;
             padding: 10px;
-            font-size: 16px;
-            border-radius: 8px;
-            border: 1px solid #ccc;
+            border-radius: 10px;
+            display: block;
         }
 
-        button {
+        input[type="checkbox"] {
+            transform: scale(1.2);
+            margin-right: 8px;
+        }
+
+        button, .small-btn {
             padding: 10px 18px;
             font-size: 16px;
             border: none;
@@ -371,10 +337,18 @@ def admin():
             background: #667eea;
             color: white;
             cursor: pointer;
+            text-decoration: none;
+            display: inline-block;
         }
 
-        button:hover {
-            background: #5a67d8;
+        .small-btn {
+            font-size: 14px;
+            padding: 6px 12px;
+            margin-left: 10px;
+        }
+
+        .clear-btn {
+            background: #e53e3e;
         }
 
         .group {
@@ -384,43 +358,58 @@ def admin():
             margin: 15px 0;
         }
 
-        .clear-btn {
-            background: #e53e3e;
-        }
-
-        .clear-btn:hover {
-            background: #c53030;
+        .new-friend {
+            background: white;
+            padding: 10px;
+            border-radius: 10px;
+            margin: 8px 0;
         }
     </style>
 </head>
 
 <body>
-    <div class="container">
-        <h1>管理员页面</h1>
+<div class="container">
+    <h1>管理员页面</h1>
 
-        <h2>当前已报名人数：{{ names|length }}</h2>
-
-        <div class="name-list">
-            <ol>
-            {% for name in names %}
-                <li>{{ name }}</li>
+    <form method="post">
+        <div class="section">
+            <h2>常来成员：勾选今天来了的人</h2>
+            <div class="member-grid">
+            {% for member in members %}
+                <label>
+                    <input type="checkbox" name="members" value="{{ member }}"
+                    {% if member in selected_members %}checked{% endif %}>
+                    {{ member }}
+                </label>
             {% endfor %}
-            </ol>
+            </div>
         </div>
 
-        <hr>
+        <div class="section">
+            <h2>新朋友名单：{{ new_friends|length }} 人</h2>
 
-        <h2>随机分组</h2>
+            {% if new_friends %}
+                {% for friend in new_friends %}
+                    <div class="new-friend">
+                        {{ friend }}
+                        <a class="small-btn" href="/add_member/{{ friend }}">加入常来名单</a>
+                    </div>
+                {% endfor %}
+            {% else %}
+                <p>目前还没有新朋友报名。</p>
+            {% endif %}
+        </div>
 
-        <form method="post">
+        <div class="section">
+            <h2>开始分组</h2>
             <input type="number" name="group_count" min="1" placeholder="请输入分几组" required>
-            <button type="submit">开始分组</button>
-        </form>
+            <button type="submit">随机分组</button>
+        </div>
+    </form>
 
-        {% if groups %}
-            <hr>
+    {% if groups %}
+        <div class="section">
             <h2>分组结果</h2>
-
             {% for group in groups %}
                 <div class="group">
                     <h3>第 {{ loop.index }} 组：{{ group|length }} 人</h3>
@@ -431,24 +420,36 @@ def admin():
                     </ul>
                 </div>
             {% endfor %}
-        {% endif %}
+        </div>
+    {% endif %}
 
-        <hr>
-
-        <form action="/clear" method="post">
-            <button class="clear-btn" type="submit" onclick="return confirm('确定要清空名单吗？')">
-                清空名单
+    <div class="section">
+        <form action="/clear_new_friends" method="post">
+            <button class="clear-btn" type="submit" onclick="return confirm('确定要清空新朋友名单吗？')">
+                清空新朋友名单
             </button>
         </form>
     </div>
+</div>
 </body>
 </html>
-""", names=names, groups=groups)
+""", members=members, new_friends=new_friends, groups=groups, selected_members=selected_members)
 
 
-@app.route("/clear", methods=["POST"])
-def clear():
-    save_names([])
+@app.route("/add_member/<name>")
+def add_member(name):
+    members = load_members()
+
+    if name not in members:
+        members.append(name)
+        save_json(MEMBERS_FILE, members)
+
+    return redirect("/admin")
+
+
+@app.route("/clear_new_friends", methods=["POST"])
+def clear_new_friends():
+    save_json(NEW_FRIENDS_FILE, [])
     return redirect("/admin")
 
 
