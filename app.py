@@ -354,13 +354,13 @@ def admin():
 
         .member-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            grid-template-columns: repeat(auto-fit, minmax(155px, 1fr));
             gap: 12px;
         }
 
         .member-card {
             background: white;
-            padding: 10px 12px;
+            padding: 12px 14px;
             border-radius: 10px;
             display: flex;
             align-items: center;
@@ -397,17 +397,30 @@ def admin():
             display: inline-block;
         }
 
-        .small-btn {
-            font-size: 13px;
-            padding: 6px 10px;
-        }
-
-        .delete-btn {
+        .delete-toggle-btn {
             background: #e53e3e;
         }
 
-        .delete-btn:hover {
+        .delete-toggle-btn:hover {
             background: #c53030;
+        }
+
+        .delete-x {
+            display: none;
+            color: white;
+            background: #e53e3e;
+            text-decoration: none;
+            font-size: 18px;
+            font-weight: bold;
+            width: 28px;
+            height: 28px;
+            line-height: 28px;
+            text-align: center;
+            border-radius: 50%;
+        }
+
+        .delete-mode .delete-x {
+            display: inline-block;
         }
 
         .clear-btn {
@@ -455,6 +468,11 @@ def admin():
             const boxes = document.querySelectorAll('input[name="members"]');
             boxes.forEach(box => box.checked = false);
         }
+
+        function toggleDeleteMode() {
+            const memberSection = document.getElementById("member-section");
+            memberSection.classList.toggle("delete-mode");
+        }
     </script>
 </head>
 
@@ -463,12 +481,13 @@ def admin():
     <h1>管理员页面</h1>
 
     <form method="post">
-        <div class="section">
+        <div class="section" id="member-section">
             <h2>常来成员：勾选今天来了的人</h2>
 
             <div class="member-actions">
                 <button type="button" onclick="selectAllMembers()">全选</button>
                 <button type="button" onclick="unselectAllMembers()">取消全选</button>
+                <button type="button" class="delete-toggle-btn" onclick="toggleDeleteMode()">删除成员</button>
             </div>
 
             <div class="member-grid">
@@ -480,10 +499,10 @@ def admin():
                         <span>{{ member }}</span>
                     </div>
 
-                    <a class="small-btn delete-btn"
+                    <a class="delete-x"
                        href="/delete_member/{{ member }}"
                        onclick="return confirm('确定要删除 {{ member }} 吗？')">
-                       删除
+                       ×
                     </a>
                 </div>
             {% endfor %}
