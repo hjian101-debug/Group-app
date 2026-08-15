@@ -470,6 +470,20 @@ def admin():
             margin-bottom: 30px;
         }
 
+        .add-friend-form {
+            display: flex;
+            gap: 12px;
+        }
+
+        .add-friend-form input {
+            flex: 1;
+            min-width: 0;
+            padding: 12px 14px;
+            font-size: 16px;
+            border: 1px solid #ccc;
+            border-radius: 8px;
+        }
+
         .member-actions {
             margin-bottom: 18px;
         }
@@ -662,6 +676,14 @@ def admin():
             .container {
                 padding: 20px;
             }
+
+            .add-friend-form {
+                flex-direction: column;
+            }
+
+            .add-friend-form button {
+                min-height: 48px;
+            }
         }
     </style>
 
@@ -743,6 +765,15 @@ def admin():
 <body>
 <div class="container">
     <h1>管理员页面</h1>
+
+    <div class="section">
+        <h2>添加新朋友</h2>
+        <form class="add-friend-form" action="/admin/add_new_friend" method="post">
+            <input type="text" name="name" placeholder="请输入新朋友姓名"
+                   aria-label="新朋友姓名" autocomplete="off" required>
+            <button type="submit">添加新朋友</button>
+        </form>
+    </div>
 
     <form method="post">
         <div class="section" id="member-section">
@@ -850,6 +881,14 @@ def admin():
 @app.route("/add_member/<name>")
 def add_member(name):
     promote_to_member(name)
+    return redirect("/admin")
+
+
+@app.route("/admin/add_new_friend", methods=["POST"])
+def admin_add_new_friend():
+    name = request.form.get("name", "").strip()
+    if name:
+        add_new_friend(name)
     return redirect("/admin")
 
 
