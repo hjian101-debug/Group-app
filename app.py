@@ -566,6 +566,39 @@ def admin():
             min-height: 160px;
         }
 
+        .group h3 {
+            margin-top: 0;
+        }
+
+        .group-list {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .group-member {
+            background: white;
+            padding: 11px 12px;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+        }
+
+        .group-member select {
+            padding: 7px;
+            border: 1px solid #c9ccef;
+            border-radius: 7px;
+            background: white;
+        }
+
+        .adjust-help {
+            color: #555;
+            margin-top: -8px;
+            margin-bottom: 18px;
+        }
+
         .new-friend {
             background: white;
             padding: 12px;
@@ -598,6 +631,25 @@ def admin():
         function toggleDeleteMode() {
             const memberSection = document.getElementById("member-section");
             memberSection.classList.toggle("delete-mode");
+        }
+
+        function updateGroupCounts() {
+            document.querySelectorAll(".group").forEach(group => {
+                const count = group.querySelectorAll(".group-member").length;
+                group.querySelector(".group-count").textContent = count;
+            });
+        }
+
+        function moveMember(select) {
+            const member = select.closest(".group-member");
+            const targetList = document.querySelector(
+                `.group[data-group="${select.value}"] .group-list`
+            );
+
+            if (!targetList) return;
+            targetList.appendChild(member);
+            member.dataset.group = select.value;
+            updateGroupCounts();
         }
     </script>
 </head>
@@ -660,16 +712,27 @@ def admin():
     {% if groups %}
         <div class="section">
             <h2>分组结果</h2>
+            <p class="adjust-help">需要调整时，在成员右侧选择要移动到的组。</p>
 
             <div class="group-grid">
             {% for group in groups %}
-                <div class="group">
-                    <h3>第 {{ loop.index }} 组：{{ group|length }} 人</h3>
-                    <ul>
+                {% set group_number = loop.index %}
+                <div class="group" data-group="{{ group_number }}">
+                    <h3>第 {{ group_number }} 组：<span class="group-count">{{ group|length }}</span> 人</h3>
+                    <div class="group-list">
                     {% for name in group %}
-                        <li>{{ name }}</li>
+                        <div class="group-member" data-group="{{ group_number }}">
+                            <span>{{ name }}</span>
+                            <select aria-label="移动 {{ name }}" onchange="moveMember(this)">
+                            {% for target in range(1, groups|length + 1) %}
+                                <option value="{{ target }}" {% if target == group_number %}selected{% endif %}>
+                                    移到第 {{ target }} 组
+                                </option>
+                            {% endfor %}
+                            </select>
+                        </div>
                     {% endfor %}
-                    </ul>
+                    </div>
                 </div>
             {% endfor %}
             </div>
