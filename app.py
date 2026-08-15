@@ -70,10 +70,11 @@ def ensure_database():
             "SELECT 1 FROM app_metadata WHERE key = 'people_initialized'"
         ).fetchone()
         if not initialized:
-            conn.executemany(
-                "INSERT INTO people (name, kind) VALUES (%s, 'member') ON CONFLICT DO NOTHING",
-                [(name,) for name in DEFAULT_MEMBERS],
-            )
+            with conn.cursor() as cursor:
+                cursor.executemany(
+                    "INSERT INTO people (name, kind) VALUES (%s, 'member') ON CONFLICT DO NOTHING",
+                    [(name,) for name in DEFAULT_MEMBERS],
+                )
             conn.execute(
                 "INSERT INTO app_metadata (key, value) VALUES ('people_initialized', 'true')"
             )
