@@ -16,6 +16,7 @@ JOIN_URL = os.environ.get(
     "JOIN_URL", "https://good-friends-group-app.onrender.com/join"
 )
 NEW_FRIENDS_FILE = "new_friends.json"
+NEW_FRIEND_STATUSES_FILE = "new_friend_statuses.json"
 MEMBERS_FILE = "members.json"
 DATABASE_URL = os.environ.get("DATABASE_URL", "").strip()
 
@@ -57,9 +58,14 @@ def ensure_database():
             CREATE TABLE IF NOT EXISTS people (
                 name TEXT PRIMARY KEY,
                 kind TEXT NOT NULL CHECK (kind IN ('member', 'new_friend')),
+                faith_status TEXT NOT NULL DEFAULT 'christian'
+                    CHECK (faith_status IN ('christian', 'seeker')),
                 created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
             )
         """)
+        conn.execute(
+            "ALTER TABLE people ADD COLUMN IF NOT EXISTS faith_status TEXT NOT NULL DEFAULT 'christian'"
+        )
         conn.execute("""
             CREATE TABLE IF NOT EXISTS app_metadata (
                 key TEXT PRIMARY KEY,
@@ -90,6 +96,19 @@ def load_people(kind):
     return [row[0] for row in rows]
 
 
+def load_faith_statuses():
+    if use_database():
+        ensure_database()
+        with get_db() as conn:
+            rows = conn.execute("SELECT name, faith_status FROM people").fetchall()
+        return {name: status for name, status in rows}
+
+    statuses = {name: "christian" for name in load_members()}
+    saved = load_json(NEW_FRIEND_STATUSES_FILE, {})
+    statuses.update({name: saved.get(name, "christian") for name in load_new_friends()})
+    return statuses
+
+
 def load_members():
     if use_database():
         return load_people("member")
@@ -104,17 +123,21 @@ def load_new_friends():
     return load_json(NEW_FRIENDS_FILE, [])
 
 
-def add_new_friend(name):
+def add_new_friend(name, faith_status="christian"):
+    if faith_status not in ("christian", "seeker"):
+        faith_status = "christian"
     if use_database():
         ensure_database()
         with get_db() as conn:
             conn.execute(
                 """
-                INSERT INTO people (name, kind)
-                VALUES (%s, 'new_friend')
-                ON CONFLICT (name) DO NOTHING
+                INSERT INTO people (name, kind, faith_status)
+                VALUES (%s, 'new_friend', %s)
+                ON CONFLICT (name) DO UPDATE
+                SET faith_status = EXCLUDED.faith_status
+                WHERE people.kind = 'new_friend'
                 """,
-                (name,),
+                (name, faith_status),
             )
         return
 
@@ -123,6 +146,10 @@ def add_new_friend(name):
     if name not in new_friends and name not in members:
         new_friends.append(name)
         save_json(NEW_FRIENDS_FILE, new_friends)
+    statuses = load_json(NEW_FRIEND_STATUSES_FILE, {})
+    if name not in members:
+        statuses[name] = faith_status
+        save_json(NEW_FRIEND_STATUSES_FILE, statuses)
 
 
 def promote_to_member(name):
@@ -169,6 +196,7 @@ def remove_all_new_friends():
             conn.execute("DELETE FROM people WHERE kind = 'new_friend'")
         return
     save_json(NEW_FRIENDS_FILE, [])
+    save_json(NEW_FRIEND_STATUSES_FILE, {})
 
 
 @app.route("/")
@@ -317,8 +345,9 @@ def qr():
 def join():
     if request.method == "POST":
         name = request.form.get("name", "").strip()
+        faith_status = request.form.get("faith_status", "christian")
         if name:
-            add_new_friend(name)
+            add_new_friend(name, faith_status)
 
         return render_template_string("""
 <!DOCTYPE html>
@@ -392,6 +421,26 @@ def join():
             margin-bottom: 20px;
         }
 
+        .faith-options {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+            margin-bottom: 22px;
+            text-align: left;
+        }
+
+        .faith-option {
+            background: #f2f3ff;
+            padding: 14px;
+            border-radius: 10px;
+            font-size: 17px;
+        }
+
+        .faith-option input {
+            width: auto;
+            margin: 0 7px 0 0;
+        }
+
         button {
             padding: 13px 30px;
             font-size: 18px;
@@ -409,7 +458,10 @@ def join():
         <h1>填写姓名</h1>
         <form method="post">
             <input name="name" placeholder="请输入你的姓名" required>
-            <br>
+            <div class="faith-options">
+                <label class="faith-option"><input type="radio" name="faith_status" value="christian" required>基督徒</label>
+                <label class="faith-option"><input type="radio" name="faith_status" value="seeker" required>慕道友</label>
+            </div>
             <button type="submit">提交</button>
         </form>
     </div>
@@ -418,23 +470,60 @@ def join():
 """
 
 
+def build_balanced_groups(attendees, leaders, faith_statuses, group_count):
+    groups = [[leader] for leader in leaders]
+    christian_counts = [
+        1 if faith_statuses.get(leader, "christian") == "christian" else 0
+        for leader in leaders
+    ]
+    remaining = [name for name in attendees if name not in leaders]
+    christians = [name for name in remaining if faith_statuses.get(name, "christian") == "christian"]
+    seekers = [name for name in remaining if faith_statuses.get(name, "christian") != "christian"]
+    random.shuffle(christians)
+    random.shuffle(seekers)
+
+    for name in christians:
+        target = min(range(group_count), key=lambda i: (christian_counts[i], len(groups[i])))
+        groups[target].append(name)
+        christian_counts[target] += 1
+
+    for name in seekers:
+        target = min(range(group_count), key=lambda i: (len(groups[i]), christian_counts[i]))
+        groups[target].append(name)
+
+    return groups
+
+
 @app.route("/admin", methods=["GET", "POST"])
 def admin():
     members = load_members()
     new_friends = load_new_friends()
+    faith_statuses = load_faith_statuses()
     groups = None
+    group_count = None
+    group_christian_counts = []
     selected_members = []
+    leaders = []
+    error = None
 
     if request.method == "POST":
         selected_members = request.form.getlist("members")
         group_count = int(request.form.get("group_count", 1))
+        leaders = request.form.getlist("leaders")
+        all_people = list(dict.fromkeys(selected_members + new_friends))
 
-        all_people = selected_members + new_friends
-        random.shuffle(all_people)
-
-        groups = [[] for _ in range(group_count)]
-        for i, name in enumerate(all_people):
-            groups[i % group_count].append(name)
+        if len(leaders) != group_count or len(set(leaders)) != group_count:
+            error = "请为每一组选择一位不同的组长。"
+        elif any(leader not in selected_members for leader in leaders):
+            error = "组长必须是今天已勾选的常来成员。"
+        else:
+            groups = build_balanced_groups(
+                all_people, leaders, faith_statuses, group_count
+            )
+            group_christian_counts = [
+                sum(faith_statuses.get(name, "christian") == "christian" for name in group)
+                for group in groups
+            ]
 
     return render_template_string("""
 <!DOCTYPE html>
@@ -482,6 +571,68 @@ def admin():
             font-size: 16px;
             border: 1px solid #ccc;
             border-radius: 8px;
+        }
+
+        .faith-select {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            background: white;
+            padding: 10px 14px;
+            border-radius: 8px;
+        }
+
+        .faith-select label {
+            white-space: nowrap;
+        }
+
+        .leader-selects {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+            gap: 12px;
+            margin: 18px 0;
+        }
+
+        .leader-selects label {
+            display: flex;
+            flex-direction: column;
+            gap: 7px;
+            font-weight: bold;
+        }
+
+        .leader-selects select {
+            padding: 11px;
+            font-size: 16px;
+            border: 1px solid #ccc;
+            border-radius: 8px;
+            background: white;
+        }
+
+        .error-message {
+            background: #fff0f0;
+            color: #b42318;
+            padding: 12px 15px;
+            border-radius: 8px;
+            margin-bottom: 16px;
+        }
+
+        .status-badge, .leader-badge {
+            display: inline-block;
+            padding: 3px 8px;
+            border-radius: 999px;
+            font-size: 13px;
+            margin-left: 7px;
+        }
+
+        .status-badge {
+            background: #edf0ff;
+            color: #4c5fc7;
+        }
+
+        .leader-badge {
+            background: #fff1bd;
+            color: #7a5b00;
+            font-weight: bold;
         }
 
         .member-actions {
@@ -684,6 +835,10 @@ def admin():
             .add-friend-form button {
                 min-height: 48px;
             }
+
+            .faith-select {
+                justify-content: space-around;
+            }
         }
     </style>
 
@@ -691,11 +846,13 @@ def admin():
         function selectAllMembers() {
             const boxes = document.querySelectorAll('input[name="members"]');
             boxes.forEach(box => box.checked = true);
+            updateLeaderSelects();
         }
 
         function unselectAllMembers() {
             const boxes = document.querySelectorAll('input[name="members"]');
             boxes.forEach(box => box.checked = false);
+            updateLeaderSelects();
         }
 
         function toggleDeleteMode() {
@@ -707,6 +864,8 @@ def admin():
             document.querySelectorAll(".group").forEach(group => {
                 const count = group.querySelectorAll(".group-member").length;
                 group.querySelector(".group-count").textContent = count;
+                const christianCount = group.querySelectorAll('.group-member[data-faith="christian"]').length;
+                group.querySelector(".christian-count").textContent = christianCount;
             });
         }
 
@@ -759,6 +918,48 @@ def admin():
             if (selectedMember) moveMemberTo(selectedMember, event.currentTarget.dataset.group);
             selectedMember = null;
         }
+
+        function updateLeaderSelects() {
+            const countInput = document.querySelector('input[name="group_count"]');
+            const container = document.getElementById("leader-selects");
+            const groupCount = Math.max(0, parseInt(countInput.value || "0", 10));
+            const currentSelections = Array.from(container.querySelectorAll("select")).map(select => select.value);
+            const previous = currentSelections.length ? currentSelections : {{ leaders|tojson }};
+            const attendees = Array.from(document.querySelectorAll('input[name="members"]:checked'))
+                .map(box => box.value);
+
+            container.innerHTML = "";
+            for (let i = 0; i < groupCount; i++) {
+                const label = document.createElement("label");
+                label.textContent = `第 ${i + 1} 组组长`;
+                const select = document.createElement("select");
+                select.name = "leaders";
+                select.required = true;
+
+                const placeholder = document.createElement("option");
+                placeholder.value = "";
+                placeholder.textContent = "请选择组长";
+                select.appendChild(placeholder);
+
+                attendees.forEach(name => {
+                    const option = document.createElement("option");
+                    option.value = name;
+                    option.textContent = name;
+                    if (previous[i] === name) option.selected = true;
+                    select.appendChild(option);
+                });
+                label.appendChild(select);
+                container.appendChild(label);
+            }
+        }
+
+        document.addEventListener("DOMContentLoaded", () => {
+            document.querySelector('input[name="group_count"]').addEventListener("input", updateLeaderSelects);
+            document.querySelectorAll('input[name="members"]').forEach(box => {
+                box.addEventListener("change", updateLeaderSelects);
+            });
+            updateLeaderSelects();
+        });
     </script>
 </head>
 
@@ -771,6 +972,10 @@ def admin():
         <form class="add-friend-form" action="/admin/add_new_friend" method="post">
             <input type="text" name="name" placeholder="请输入新朋友姓名"
                    aria-label="新朋友姓名" autocomplete="off" required>
+            <div class="faith-select">
+                <label><input type="radio" name="faith_status" value="christian" required> 基督徒</label>
+                <label><input type="radio" name="faith_status" value="seeker" required> 慕道友</label>
+            </div>
             <button type="submit">添加新朋友</button>
         </form>
     </div>
@@ -811,6 +1016,7 @@ def admin():
                 {% for friend in new_friends %}
                     <div class="new-friend">
                         {{ friend }}
+                        <span class="status-badge">{{ '基督徒' if faith_statuses.get(friend) == 'christian' else '慕道友' }}</span>
                         <a class="small-btn" href="/add_member/{{ friend }}">加入常来名单</a>
                     </div>
                 {% endfor %}
@@ -821,7 +1027,11 @@ def admin():
 
         <div class="section">
             <h2>开始分组</h2>
-            <input type="number" name="group_count" min="1" placeholder="请输入分几组" required>
+            {% if error %}<div class="error-message">{{ error }}</div>{% endif %}
+            <p>先输入组数，再为每一组选择一位今天已勾选的组长。</p>
+            <input type="number" name="group_count" min="1" max="20"
+                   value="{{ group_count or '' }}" placeholder="请输入分几组" required>
+            <div class="leader-selects" id="leader-selects"></div>
             <button type="submit">随机分组</button>
         </div>
     </form>
@@ -837,13 +1047,16 @@ def admin():
                 <div class="group" data-group="{{ group_number }}"
                      ondragover="allowGroupDrop(event)" ondragleave="leaveGroupDrop(event)"
                      ondrop="dropMember(event)">
-                    <h3>第 {{ group_number }} 组：<span class="group-count">{{ group|length }}</span> 人</h3>
+                    <h3>第 {{ group_number }} 组：<span class="group-count">{{ group|length }}</span> 人
+                        · 基督徒 <span class="christian-count">{{ group_christian_counts[group_number - 1] }}</span> 人</h3>
                     <div class="group-list">
                     {% for name in group %}
                         <div class="group-member" data-group="{{ group_number }}" data-name="{{ name }}"
-                             draggable="true" ondragstart="startMemberDrag(event)">
-                            <span>{{ name }}</span>
-                            <button type="button" class="move-btn" onclick="openMoveSheet(this)">换组</button>
+                             data-faith="{{ faith_statuses.get(name, 'christian') }}"
+                             draggable="{{ 'false' if name == leaders[group_number - 1] else 'true' }}"
+                             {% if name != leaders[group_number - 1] %}ondragstart="startMemberDrag(event)"{% endif %}>
+                            <span>{{ name }}{% if name == leaders[group_number - 1] %}<span class="leader-badge">组长</span>{% endif %}</span>
+                            {% if name != leaders[group_number - 1] %}<button type="button" class="move-btn" onclick="openMoveSheet(this)">换组</button>{% endif %}
                         </div>
                     {% endfor %}
                     </div>
@@ -875,7 +1088,10 @@ def admin():
 </div>
 </body>
 </html>
-""", members=members, new_friends=new_friends, groups=groups, selected_members=selected_members)
+""", members=members, new_friends=new_friends, groups=groups,
+       selected_members=selected_members, faith_statuses=faith_statuses,
+       leaders=leaders, error=error, group_count=group_count,
+       group_christian_counts=group_christian_counts)
 
 
 @app.route("/add_member/<name>")
@@ -887,8 +1103,9 @@ def add_member(name):
 @app.route("/admin/add_new_friend", methods=["POST"])
 def admin_add_new_friend():
     name = request.form.get("name", "").strip()
+    faith_status = request.form.get("faith_status", "christian")
     if name:
-        add_new_friend(name)
+        add_new_friend(name, faith_status)
     return redirect("/admin")
 
 
