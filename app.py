@@ -5,11 +5,17 @@ import random
 import qrcode
 from io import BytesIO
 
+try:
+    import psycopg
+except ImportError:
+    psycopg = None
+
 app = Flask(__name__)
 
 JOIN_URL = "https://group-app-55j5.onrender.com/join"
 NEW_FRIENDS_FILE = "new_friends.json"
 MEMBERS_FILE = "members.json"
+DATABASE_URL = os.environ.get("DATABASE_URL", "").strip()
 
 DEFAULT_MEMBERS = [
     "孙牧师", "师母", "胡老师", "京台姐", "Henry", "春霞", "Monica", "新业",
@@ -30,14 +36,136 @@ def save_json(filename, data):
         json.dump(data, f, ensure_ascii=False, indent=2)
 
 
+def use_database():
+    return bool(DATABASE_URL)
+
+
+def get_db():
+    if psycopg is None:
+        raise RuntimeError("DATABASE_URL is set, but psycopg is not installed")
+    return psycopg.connect(DATABASE_URL)
+
+
+def ensure_database():
+    if not use_database():
+        return
+
+    with get_db() as conn:
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS people (
+                name TEXT PRIMARY KEY,
+                kind TEXT NOT NULL CHECK (kind IN ('member', 'new_friend')),
+                created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+            )
+        """)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS app_metadata (
+                key TEXT PRIMARY KEY,
+                value TEXT NOT NULL
+            )
+        """)
+        initialized = conn.execute(
+            "SELECT 1 FROM app_metadata WHERE key = 'people_initialized'"
+        ).fetchone()
+        if not initialized:
+            conn.executemany(
+                "INSERT INTO people (name, kind) VALUES (%s, 'member') ON CONFLICT DO NOTHING",
+                [(name,) for name in DEFAULT_MEMBERS],
+            )
+            conn.execute(
+                "INSERT INTO app_metadata (key, value) VALUES ('people_initialized', 'true')"
+            )
+
+
+def load_people(kind):
+    ensure_database()
+    with get_db() as conn:
+        rows = conn.execute(
+            "SELECT name FROM people WHERE kind = %s ORDER BY created_at, name",
+            (kind,),
+        ).fetchall()
+    return [row[0] for row in rows]
+
+
 def load_members():
+    if use_database():
+        return load_people("member")
     members = load_json(MEMBERS_FILE, DEFAULT_MEMBERS)
     save_json(MEMBERS_FILE, members)
     return members
 
 
 def load_new_friends():
+    if use_database():
+        return load_people("new_friend")
     return load_json(NEW_FRIENDS_FILE, [])
+
+
+def add_new_friend(name):
+    if use_database():
+        ensure_database()
+        with get_db() as conn:
+            conn.execute(
+                """
+                INSERT INTO people (name, kind)
+                VALUES (%s, 'new_friend')
+                ON CONFLICT (name) DO NOTHING
+                """,
+                (name,),
+            )
+        return
+
+    new_friends = load_new_friends()
+    members = load_members()
+    if name not in new_friends and name not in members:
+        new_friends.append(name)
+        save_json(NEW_FRIENDS_FILE, new_friends)
+
+
+def promote_to_member(name):
+    if use_database():
+        ensure_database()
+        with get_db() as conn:
+            conn.execute(
+                """
+                INSERT INTO people (name, kind)
+                VALUES (%s, 'member')
+                ON CONFLICT (name) DO UPDATE SET kind = 'member'
+                """,
+                (name,),
+            )
+        return
+
+    members = load_members()
+    new_friends = load_new_friends()
+    if name not in members:
+        members.append(name)
+        save_json(MEMBERS_FILE, members)
+    if name in new_friends:
+        new_friends.remove(name)
+        save_json(NEW_FRIENDS_FILE, new_friends)
+
+
+def remove_member(name):
+    if use_database():
+        ensure_database()
+        with get_db() as conn:
+            conn.execute("DELETE FROM people WHERE name = %s AND kind = 'member'", (name,))
+        return
+
+    members = load_members()
+    if name in members:
+        members.remove(name)
+        save_json(MEMBERS_FILE, members)
+
+
+def remove_all_new_friends():
+    if use_database():
+        ensure_database()
+        with get_db() as conn:
+            conn.execute("DELETE FROM people WHERE kind = 'new_friend'")
+        return
+    save_json(NEW_FRIENDS_FILE, [])
 
 
 @app.route("/")
@@ -187,12 +315,7 @@ def join():
     if request.method == "POST":
         name = request.form.get("name", "").strip()
         if name:
-            new_friends = load_new_friends()
-            members = load_members()
-
-            if name not in new_friends and name not in members:
-                new_friends.append(name)
-                save_json(NEW_FRIENDS_FILE, new_friends)
+            add_new_friend(name)
 
         return render_template_string("""
 <!DOCTYPE html>
@@ -565,34 +688,19 @@ def admin():
 
 @app.route("/add_member/<name>")
 def add_member(name):
-    members = load_members()
-    new_friends = load_new_friends()
-
-    if name not in members:
-        members.append(name)
-        save_json(MEMBERS_FILE, members)
-
-    if name in new_friends:
-        new_friends.remove(name)
-        save_json(NEW_FRIENDS_FILE, new_friends)
-
+    promote_to_member(name)
     return redirect("/admin")
 
 
 @app.route("/delete_member/<name>")
 def delete_member(name):
-    members = load_members()
-
-    if name in members:
-        members.remove(name)
-        save_json(MEMBERS_FILE, members)
-
+    remove_member(name)
     return redirect("/admin")
 
 
 @app.route("/clear_new_friends", methods=["POST"])
 def clear_new_friends():
-    save_json(NEW_FRIENDS_FILE, [])
+    remove_all_new_friends()
     return redirect("/admin")
 
 
