@@ -12,7 +12,9 @@ except ImportError:
 
 app = Flask(__name__)
 
-JOIN_URL = "https://group-app-55j5.onrender.com/join"
+JOIN_URL = os.environ.get(
+    "JOIN_URL", "https://good-friends-group-app.onrender.com/join"
+)
 NEW_FRIENDS_FILE = "new_friends.json"
 MEMBERS_FILE = "members.json"
 DATABASE_URL = os.environ.get("DATABASE_URL", "").strip()
