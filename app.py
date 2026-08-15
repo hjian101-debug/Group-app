@@ -564,6 +564,12 @@ def admin():
             padding: 20px;
             border-radius: 14px;
             min-height: 160px;
+            transition: background 0.2s, outline 0.2s;
+        }
+
+        .group.drag-over {
+            background: #e3e6ff;
+            outline: 3px dashed #667eea;
         }
 
         .group h3 {
@@ -584,13 +590,55 @@ def admin():
             align-items: center;
             justify-content: space-between;
             gap: 12px;
+            cursor: grab;
         }
 
-        .group-member select {
-            padding: 7px;
-            border: 1px solid #c9ccef;
-            border-radius: 7px;
+        .move-btn {
+            padding: 8px 13px;
+            font-size: 14px;
+            white-space: nowrap;
+        }
+
+        .move-sheet-backdrop {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.42);
+            z-index: 20;
+            align-items: flex-end;
+            justify-content: center;
+        }
+
+        .move-sheet-backdrop.open {
+            display: flex;
+        }
+
+        .move-sheet {
             background: white;
+            width: min(520px, 100%);
+            padding: 24px;
+            border-radius: 22px 22px 0 0;
+            box-shadow: 0 -8px 30px rgba(0,0,0,0.2);
+        }
+
+        .move-sheet h3 {
+            margin-top: 0;
+        }
+
+        .move-options {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 12px;
+        }
+
+        .move-options button {
+            min-height: 52px;
+        }
+
+        .cancel-move {
+            width: 100%;
+            margin-top: 14px;
+            background: #777;
         }
 
         .adjust-help {
@@ -640,16 +688,54 @@ def admin():
             });
         }
 
-        function moveMember(select) {
-            const member = select.closest(".group-member");
+        let selectedMember = null;
+
+        function moveMemberTo(member, targetGroup) {
             const targetList = document.querySelector(
-                `.group[data-group="${select.value}"] .group-list`
+                `.group[data-group="${targetGroup}"] .group-list`
             );
 
             if (!targetList) return;
             targetList.appendChild(member);
-            member.dataset.group = select.value;
+            member.dataset.group = targetGroup;
             updateGroupCounts();
+        }
+
+        function openMoveSheet(button) {
+            selectedMember = button.closest(".group-member");
+            document.getElementById("move-member-name").textContent = selectedMember.dataset.name;
+            document.getElementById("move-sheet-backdrop").classList.add("open");
+        }
+
+        function closeMoveSheet() {
+            document.getElementById("move-sheet-backdrop").classList.remove("open");
+            selectedMember = null;
+        }
+
+        function chooseTargetGroup(groupNumber) {
+            if (selectedMember) moveMemberTo(selectedMember, groupNumber);
+            closeMoveSheet();
+        }
+
+        function startMemberDrag(event) {
+            selectedMember = event.currentTarget;
+            event.dataTransfer.effectAllowed = "move";
+        }
+
+        function allowGroupDrop(event) {
+            event.preventDefault();
+            event.currentTarget.classList.add("drag-over");
+        }
+
+        function leaveGroupDrop(event) {
+            event.currentTarget.classList.remove("drag-over");
+        }
+
+        function dropMember(event) {
+            event.preventDefault();
+            event.currentTarget.classList.remove("drag-over");
+            if (selectedMember) moveMemberTo(selectedMember, event.currentTarget.dataset.group);
+            selectedMember = null;
         }
     </script>
 </head>
@@ -712,29 +798,38 @@ def admin():
     {% if groups %}
         <div class="section">
             <h2>分组结果</h2>
-            <p class="adjust-help">需要调整时，在成员右侧选择要移动到的组。</p>
+            <p class="adjust-help">手机点“换组”选择目标组；电脑也可以直接拖动成员。</p>
 
             <div class="group-grid">
             {% for group in groups %}
                 {% set group_number = loop.index %}
-                <div class="group" data-group="{{ group_number }}">
+                <div class="group" data-group="{{ group_number }}"
+                     ondragover="allowGroupDrop(event)" ondragleave="leaveGroupDrop(event)"
+                     ondrop="dropMember(event)">
                     <h3>第 {{ group_number }} 组：<span class="group-count">{{ group|length }}</span> 人</h3>
                     <div class="group-list">
                     {% for name in group %}
-                        <div class="group-member" data-group="{{ group_number }}">
+                        <div class="group-member" data-group="{{ group_number }}" data-name="{{ name }}"
+                             draggable="true" ondragstart="startMemberDrag(event)">
                             <span>{{ name }}</span>
-                            <select aria-label="移动 {{ name }}" onchange="moveMember(this)">
-                            {% for target in range(1, groups|length + 1) %}
-                                <option value="{{ target }}" {% if target == group_number %}selected{% endif %}>
-                                    移到第 {{ target }} 组
-                                </option>
-                            {% endfor %}
-                            </select>
+                            <button type="button" class="move-btn" onclick="openMoveSheet(this)">换组</button>
                         </div>
                     {% endfor %}
                     </div>
                 </div>
             {% endfor %}
+            </div>
+        </div>
+
+        <div class="move-sheet-backdrop" id="move-sheet-backdrop" onclick="if (event.target === this) closeMoveSheet()">
+            <div class="move-sheet" role="dialog" aria-modal="true" aria-labelledby="move-sheet-title">
+                <h3 id="move-sheet-title">移动 <span id="move-member-name"></span> 到：</h3>
+                <div class="move-options">
+                {% for target in range(1, (groups|length) + 1) %}
+                    <button type="button" onclick="chooseTargetGroup('{{ target }}')">第 {{ target }} 组</button>
+                {% endfor %}
+                </div>
+                <button type="button" class="cancel-move" onclick="closeMoveSheet()">取消</button>
             </div>
         </div>
     {% endif %}
